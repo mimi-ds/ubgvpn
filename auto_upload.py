@@ -15,8 +15,6 @@ opts = Options()
 browser = Firefox(options=opts)
 browser.get('https://www.xvideos.com/account/uploads/new')
 
-#browser.find_element_by_id("search_form_input_homepage").send_keys("search query")
-#browser.find_element_by_id("search_button_homepage").click()
 
 browser.find_element_by_id("signin-form_login").send_keys("vasek1234567@shitmail.me")
 browser.find_element_by_id("signin-form_password").send_keys("vasyadigital1234")
