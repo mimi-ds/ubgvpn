@@ -3,6 +3,10 @@ from selenium.webdriver import Firefox
 from selenium.webdriver.firefox.options import Options
 import time
 from os import listdir, path
+import random
+
+text_file = open("C:/vpn/tags.txt", "r")
+tags = text_file.read().split(' ')
 
 #from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 #cap = DesiredCapabilities().FIREFOX
@@ -34,3 +38,5 @@ browser.find_element_by_xpath('//*[@id="upload_form_networksites_networksites_ce
 for f in listdir('C:/vpn/videos/'):
 	filename, file_extension = path.splitext(f)
 	browser.find_element_by_xpath('//*[@id="upload_form_titledesc_title"]').send_keys(filename)
+	list_of_random_tags = random.sample(tags, 10)
+	print list_of_random_tags
