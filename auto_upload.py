@@ -3,11 +3,12 @@ from selenium.webdriver import Firefox
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoAlertPresentException
 import time
-from os import listdir, path
+from os import listdir, path, getcwd, makedirs
 import random
-import os
+import sys
+from subprocess import call
 
-text_file_path = os.getcwd() + '\\tags.txt'
+text_file_path = getcwd() + '/tags.txt'
 text_file = open(text_file_path, "r")
 tags = text_file.read().split(' ')
 
@@ -41,9 +42,31 @@ browser.find_element_by_xpath('//*[@id="upload_form_category_category_centered_c
 time.sleep(2) 
 browser.find_element_by_xpath('//*[@id="upload_form_networksites_networksites_centered_networksites_DEFAULT_ONLY"]').click()
 
-videos_path = os.getcwd() + '\\videos\\'
+#videos_path = getcwd() + '\\videos\\'
+
+videos_path = sys.argv[1]
+water_videos_path = videos_path + '/water/'
+if not path.exists(water_videos_path):
+	makedirs(water_videos_path)
+ffmpeg_path = sys.argv[2]
+watermark = getcwd() + '/watermark.png'
+
 for f in listdir(videos_path):
-	filename, file_extension = path.splitext(f)
-	browser.find_element_by_xpath('//*[@id="upload_form_titledesc_title"]').send_keys(filename)
-	list_of_random_tags = random.sample(tags, 10)
-print list_of_random_tags
+	if path.isfile(videos_path + f):
+
+		# Watermarked video creation
+		input_name = videos_path + f
+		output_name = water_videos_path + f
+		call([ffmpeg_path, "-i", input_name, "-i", watermark, "-filter_complex", "[1:v][0:v]scale2ref=iw*0.0004*ih*2.45:ih*0.0004*iw[logo1][base];[base][logo1]overlay=(main_w-overlay_w):(main_h-overlay_h)", output_name])
+
+		filename, file_extension = path.splitext(f)
+		browser.find_element_by_xpath('//*[@id="upload_form_titledesc_title"]').send_keys(filename)
+
+		list_of_random_tags = random.sample(tags, 2)
+		for tag in list_of_random_tags:
+			#browser.find_element_by_xpath('/html/body/div/div[4]/div/div/div[2]/div/div[2]/form/fieldset[6]/div/div/div/div[1]/button').click()
+			browser.find_element_by_xpath('//*[@class="add"]').click()
+			browser.find_element_by_xpath('//*[@class="focus"]').send_keys(tag)
+		browser.find_element_by_xpath('//*[@class="add"]').click()
+
+#browser.find_element_by_xpath('//*[@class="file-upload-recap"]').send_keys('C:/vpn/videos/exuceme.avi')
