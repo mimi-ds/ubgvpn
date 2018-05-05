@@ -8,6 +8,7 @@ import random
 import sys
 from subprocess import call
 
+
 text_file_path = getcwd() + '/tags.txt'
 text_file = open(text_file_path, "r")
 tags = text_file.read().split(' ')
@@ -68,5 +69,10 @@ for f in listdir(videos_path):
 			browser.find_element_by_xpath('//*[@class="add"]').click()
 			browser.find_element_by_xpath('//*[@class="focus"]').send_keys(tag)
 		browser.find_element_by_xpath('//*[@class="add"]').click()
+		
 
-#browser.find_element_by_xpath('//*[@class="file-upload-recap"]').send_keys('C:/vpn/videos/exuceme.avi')
+browser.find_element_by_xpath('//*[@class="checkbox-error-box"]').click()
+
+browser.find_element_by_xpath('//input[@id="upload_form_file_file_options_file_1_file"]').send_keys('D:\\Python\\VPN\\videos\\IMG_0005.mov')
+time.sleep(2) 
+browser.find_element_by_xpath('//button[contains(.,"Upload")]').click()
