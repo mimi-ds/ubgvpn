@@ -15,7 +15,7 @@ function handshake() {
   document.getElementById("srp-login2").value = data.login;
   document.getElementById("srp-login").value = data.login;
 
-  jQuery.post( 'http://ubgvpn.win/my-account/', jQuery('form#handshake-form').serialize(),
+  jQuery.post( '/my-account/', jQuery('form#handshake-form').serialize(),
        function(data) {
          //console.log(data);
          var salt = jQuery(data).find('#srp-salt').val();
@@ -34,17 +34,18 @@ function auth(session, session_id) {
   document.getElementById("srp-client-auth").value = srp.session.getM();
   document.getElementById("srp-session-id").value = session_id;
 
-  console.log(srp.session.getM());
-
-  jQuery.post( 'http://ubgvpn.win/my-account/', jQuery('form#auth-form').serialize(),
+  jQuery.post( '/my-account/', jQuery('form#auth-form').serialize(),
        function(data) {
          //console.log(data);
          var token = jQuery(data).find('#srp-token').val();
          console.log("token: " + token);
          var cert = jQuery(data).find('#cert').text();
+         var config = jQuery(data).find('#config').text();
          console.log(cert);
+         console.log(config);
          //alert(cert);
          jQuery("#cert-dialog").text(cert);
+         jQuery("#config-dialog").text(config);
        }
   );
 }

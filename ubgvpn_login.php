@@ -75,7 +75,17 @@ function bitmask_login_html_form_code() {
   echo '<p><input type="submit" name="srp-submitted" id="srp-submitted" value="Check" onclick="handshake()"></p>';
 
   // Debug output
-  echo '<textarea id="cert-dialog" cols="80" rows="50" disabled> </textarea>';
+  echo '<table>';
+  echo '<tr>';
+  echo '<td>';
+  echo '<textarea id="cert-dialog" cols="60" rows="50" disabled> </textarea>';
+  echo '</td>';
+  echo '<td>';
+  echo '<textarea id="config-dialog" cols="60" rows="50" disabled> </textarea>';
+  echo '</td>';
+  echo '</tr>';
+  echo '</table>';
+
 }
 
 // Stage 2, use POSTed data to make handshake request to LEAP
@@ -126,7 +136,7 @@ function bitmask_login3_html_form_code() {
     // TODO: Remove hardcoded URL
     $url = 'https://ubgvpn.xyz/1/sessions/' . $login . '.json';
     $cookie_string = '_session_id=' . $session_id;
-    // Combibe request with handshake data for final auth.
+    // Combine request with handshake data for final auth.
     $args = array(  
         'timeout'     => 45,
         'redirection' => 1,
@@ -136,27 +146,29 @@ function bitmask_login3_html_form_code() {
         'cookies' => array(),
         'method' => 'PUT'
     );
-
     $response = wp_remote_post( $url, $args );
     $response_code = wp_remote_retrieve_response_code( $response );
     // TODO: Graceful error handling
     $id = json_decode($response['body']) -> id;
     $M2 =  json_decode($response['body']) -> M2;
     $token =  json_decode($response['body']) -> token;
-
     // Debug output.
     echo '<p>response' . $response_code . ' id: ' . $id .' token: ' . $token . '</p>';
 
     // This will be picked up by JS
     echo '<input type="hidden" name="srp-token" id="srp-token" value="' . $token . '"></input>';
 
+    // TODO: Remove hardcoded URLs
     echo '<div id="cert">';
-    echo retrieve_cert($cookie_string, $token);
+    echo retrieve_leap_data('https://ubgvpn.xyz/1/cert', $cookie_string, $token);
+    echo '</div>';
+    echo '<div id="config">';
+    echo retrieve_leap_data('https://ubgvpn.xyz/1/configs/eip-service.json', $cookie_string, $token);
     echo '</div>';
   }
 }
 
-function retrieve_cert($cookie_string, $token) {
+function retrieve_leap_data($url, $cookie_string, $token) {
   // Retrieve certificate with authenticated request.
   // Using handshake cookie and auth. token.
   $headers = array(
@@ -165,17 +177,16 @@ function retrieve_cert($cookie_string, $token) {
   );
 
   $args_cert = array( 
-      'timeout'     => 45,
+      'timeout'     => 30,
       'redirection' => 1,
       'blocking'    => true,
       'headers' => $headers,
       'body'    => array(),
       'cookies' => array(),
-      'method' => 'POST'
+      'method' => 'GET'
   );
 
-  // TODO: Remove hardcoded url
-  $response = wp_remote_post('https://ubgvpn.xyz/1/cert?token='. $token, $args_cert);
+  $response = wp_remote_post($url, $args_cert);
   // TODO: Graceful error handling
   return $response['body'];
 }

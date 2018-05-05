@@ -10,7 +10,7 @@ License: GPL2
 */
 
 function html_form_code($login) {
-  echo 'You specified the following login.<p style="font-weight:bold; font-style:normal"> ' .
+  echo 'The following is your login.<p style="font-weight:bold; font-style:normal"> ' .
        esc_attr($login) .
        '</p><br/>';
 
@@ -125,14 +125,23 @@ function bitmask_register_shortcode($atts = [], $content = null, $tag = '') {
   $user = strtolower($content);
   $order_no = esc_html__($wporg_atts['order_no'], 'wporg');
 
+  $order = wc_get_order( $order_no );
+  $username = $order->get_billing_first_name();
+
+  // Hacking attempt?
+  if ($username != $order->get_billing_first_name()) {
+    wc_add_notice( __( 'Please, contact support' ), 'error' );
+    return ob_get_clean();
+  }
+
+
   // Show user form for entering desired password.
   // Password is not POSTed, instead SRP secure data is POSTed.
   // On POST make request to LEAP for new user registration.
-  // Unique login is the combined username+order number
   if (isset( $_POST["srp-submitted"] )) {
-    register_user($user.$order_no);
+    register_user($user);
   } else {
-    html_form_code($user.$order_no);
+    html_form_code($user);
   }
 
   return ob_get_clean();
@@ -143,11 +152,22 @@ add_shortcode( 'bitmask_register_form', 'bitmask_register_shortcode' );
 // Assign invite code to a user once he payed for it.
 add_action( 'woocommerce_payment_complete', 'payment_complete' );
 
-// TODO: Handle possible race condition
-// two buyes at the same time may raise conflict on assigning invite code.
+// Note: two buyes at the same time may raise conflict on assigning invite code.
+// 5 attempts are allowed to resolve such conflict.
 function payment_complete($order_id) {  
   $entry = get_available_invite_code();
-  assign_invite_code($order_id, $entry->key, $entry->_id, $entry->_rev);
+  $success = assign_invite_code($order_id, $entry);
+  $num_attempts = 1;
+  while (!$success && $num_attempts < 5) {
+    $entry = get_available_invite_code();
+    $success = assign_invite_code($order_id, $entry);
+    $num_attempts++;
+  }
+  // Pathological situation, CouchDB instance is down?
+  if (!$success) {
+    trigger_error('Fatal error during registration
+                   Please, contact support with the following order id' . $order_id);
+  }
 }
 
 function get_user_invite_code($user) {
@@ -191,21 +211,34 @@ function get_available_invite_code() {
 
   $url = 'http://127.0.0.1:5984/invite_codes/_find';
   $response = wp_remote_post( $url, $args );
-  // TODO: graceful error handling
-  $docs = json_decode($response['body'])->docs;
-  $entry = array_shift($docs);
-  return $entry;
+  $result = wp_remote_retrieve_response_code($response);
+  if ($result == '200') {
+    $docs = json_decode($response['body'])->docs;
+    // Should be exactly one element.
+    if (count($docs) == '1') {
+      $entry = array_shift($docs);
+      return $entry;
+    }
+  }
+  // Something pathological has happened.
+  return 'ERR_NO_CODE';
 }
 
-function assign_invite_code($order_id, $key, $id, $rev) {
+function assign_invite_code($order_id, $entry) {
+  if ($entry == 'ERR_NO_CODE')
+    return false;
+
+  $key = $entry->key;
+  $id = $entry->_id;
+  $rev = $entry->_rev;
+
   // Retrieve WooCommerce data by order_id
   $order = wc_get_order( $order_id );
   $username = $order->get_billing_first_name();
-  $order_number = $order->get_order_number();
  
   // Data for CouchDB document update request
   $body_arr = array(
-      'user' => $username.$order_number,
+      'user' => $username,
       'key'  => $key,
       '_rev' => $rev,
   );
@@ -222,6 +255,8 @@ function assign_invite_code($order_id, $key, $id, $rev) {
 
   $url = 'http://127.0.0.1:5984/invite_codes/'.$id;
   $response = wp_remote_post( $url, $args );
+  $result = wp_remote_retrieve_response_code($response);
+  return $result == '201';
 }
 
 ?>
