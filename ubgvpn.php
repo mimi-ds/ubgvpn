@@ -9,10 +9,15 @@ Author URI: ubgvpn.win
 License: GPL2
 */
 
-function html_form_code($login) {
-  echo 'The following is your login.<p style="font-weight:bold; font-style:normal"> ' .
-       esc_attr($login) .
-       '</p><br/>';
+function html_show_success_form($login, $user_entry) {
+  echo '<h2> Success! </h2>';
+  echo 'The following is your login.<p style="font-weight:bold; font-style:normal"> ' . esc_attr($login) . '</p><br/>';
+  $expire = date('d-m-Y h:m:s', $user_entry->expire);
+  echo 'The following is expiration date of your VPN access.<p style="font-weight:bold; font-style:normal"> ' . esc_attr($expire) . '</p><br/>'; 
+}
+
+function html_show_register_form($login) {
+  echo 'The following is your login.<p style="font-weight:bold; font-style:normal"> ' . esc_attr($login) . '</p><br/>';
 
   // JS will look for session[login] and session[password]
   echo '<input type="hidden" id="srp_username" name="session[login]" value="' . esc_attr($login) . '" disabled/>';
@@ -34,7 +39,8 @@ function register_user($login) {
   $srp_salt = sanitize_text_field( $_POST["srp-salt"] );
   $srp_verifier =  sanitize_text_field( $_POST["srp-verifier"] );
   // Retrieves code from local CouchDB instance
-  $invite_code = get_user_invite_code($login);
+  $user_entry = get_entry_of_user($login);
+  $invite_code = $user_entry->key;
 
   // Data for LEAP
   $body_arr = array(
@@ -57,25 +63,31 @@ function register_user($login) {
   // TODO: Remove hardcoded URLs
   $url = 'https://ubgvpn.xyz/1/users.json';
   $response = wp_remote_post( $url, $args );
-  $result = wp_remote_retrieve_response_code($response);
+  $return_code = wp_remote_retrieve_response_code($response);
+  $result = $return_code == '201';
+  if ($result) {
+    $result = update_expire_date_in_leap_db($login, $user_entry->expire) != 'ERR_NO_CODE';
+  }
   // TODO: graceful error handling
 
   // Debug info
-  if ($result == '201') {
+  if ($result) {
+    // Leap user created. Update expire data.
+    
     echo '<script language="javascript">';
     echo 'alert("Success!")';
     echo '</script>';
-    print_r("REGISTRATION COMPLETE");
+    html_show_success_form($login, $user_entry);
+    //print_r("REGISTRATION COMPLETE");
   } else {
     echo '<script language="javascript">';
     echo 'alert("Fail!")';
     echo '</script>';
     print_r("REGISTRATION FAILED");
+    print_r('\n');
+    print_r($response);
   }
 
-  print_r('\n');
-  print_r($response);
-  // TODO: print fancy success message
 }
 
 function bitmask_register_signup_srp() {
@@ -127,21 +139,28 @@ function bitmask_register_shortcode($atts = [], $content = null, $tag = '') {
 
   $order = wc_get_order( $order_no );
   $username = $order->get_billing_first_name();
+  $new_or_exist = $order->get_billing_phone();
 
   // Hacking attempt?
-  if ($username != $order->get_billing_first_name()) {
+  if ($username != $order->get_billing_first_name() ||
+      ($new_or_exist != 'option_new' && $new_or_exist !='option_exst')) {
     wc_add_notice( __( 'Please, contact support' ), 'error' );
     return ob_get_clean();
   }
 
-
-  // Show user form for entering desired password.
-  // Password is not POSTed, instead SRP secure data is POSTed.
-  // On POST make request to LEAP for new user registration.
-  if (isset( $_POST["srp-submitted"] )) {
-    register_user($user);
+  if ($new_or_exist == 'option_new') {
+    // Show user form for entering desired password.
+    // Password is not POSTed, instead SRP secure data is POSTed.
+    // On POST make request to LEAP for new user registration.
+    if (isset( $_POST["srp-submitted"] )) {
+      register_user($user);
+    } else {
+      html_show_register_form($user);
+    }
   } else {
-    html_form_code($user);
+    $user_entry = get_entry_of_user($user);
+    // Show new expire date
+    html_show_success_form($user, $user_entry);
   }
 
   return ob_get_clean();
@@ -152,15 +171,61 @@ add_shortcode( 'bitmask_register_form', 'bitmask_register_shortcode' );
 // Assign invite code to a user once he payed for it.
 add_action( 'woocommerce_payment_complete', 'payment_complete' );
 
+function payment_complete($order_id) {
+  // Either creating new account or updating the existing one.
+  $order = wc_get_order( $order_id );
+  $new_or_exist = $order->get_billing_phone();
+  if ($new_or_exist == 'option_new') {
+    add_new_account_and_key($order_id); 
+  } else { // option_exst
+    update_expire_date_of_existing_account($order_id);
+  }
+}
+
+function update_expire_date_of_existing_account($order_id) {
+  $order = wc_get_order( $order_id );
+  $username = $order->get_billing_first_name();
+  $item = array_shift($order->get_items());
+  $months = $item->get_product()->get_attribute('duration');
+
+  $user_data = get_entry_of_user($username);
+  $current_expire_date = $user_data->expire;
+  $new_expire_date = strtotime('now');
+  if (time() - $current_expire_date > 0) {
+    // update starting from now
+    $new_expire_date = strtotime('+' . $months .' months');
+  } else {
+    $new_expire_date =
+      strtotime($current_expire_date . '+' . $months .' months');
+  }
+
+  $success = assign_user_data($username, $user_data, $new_expire_date);
+
+  $success = $success &&
+             (update_expire_date_in_leap_db($username, $new_expire_date) != 'ERR_NO_CODE');
+
+  if (!$success) {
+    trigger_error('Fatal error during updating account
+                   Please, contact support with the following order id' . $order_id);
+  }
+}
+
 // Note: two buyes at the same time may raise conflict on assigning invite code.
 // 5 attempts are allowed to resolve such conflict.
-function payment_complete($order_id) {  
-  $entry = get_available_invite_code();
-  $success = assign_invite_code($order_id, $entry);
+function add_new_account_and_key($order_id) {  
+  // Retrieve order data
+  $order = wc_get_order( $order_id );
+  $username = $order->get_billing_first_name();
+  $item = array_shift($order->get_items());
+  $months = $item->get_product()->get_attribute('duration');
+  $expire = strtotime('+' . $months .' months');
+
+  $entry = get_entry_of_user('na');
+  $success = assign_user_data($username, $entry, $expire);
   $num_attempts = 1;
   while (!$success && $num_attempts < 5) {
-    $entry = get_available_invite_code();
-    $success = assign_invite_code($order_id, $entry);
+    $entry = get_entry_of_user('na');
+    $success = assign_user_data($username, $entry, $expire);
     $num_attempts++;
   }
   // Pathological situation, CouchDB instance is down?
@@ -170,32 +235,10 @@ function payment_complete($order_id) {
   }
 }
 
-function get_user_invite_code($user) {
-  $body_arr = array( 'selector' => array( 'user' => $user ),
-                     'limit' => 1
-                   );
-  $args = array(
-       'timeout'     => 10,
-       'redirection' => 1,
-       'blocking'    => true,
-       'headers' => array('Content-Type' => 'application/json'),
-       'body'    => json_encode($body_arr),
-       'cookies' => array(),
-       'method' => 'POST'
-  );
-
-  $url = 'http://127.0.0.1:5984/invite_codes/_find';
-  $response = wp_remote_post( $url, $args );
-  // TODO: graceful error handling
-  $docs = json_decode($response['body'])->docs;
-  $entry = array_shift($docs);
-  return $entry->key;
-}
-
-function get_available_invite_code() {
+function get_entry_of_user($username) {
   // Data for CouchDB find single invite code request
   $body_arr = array(
-      'selector' => array( 'user' => 'na' ),
+      'selector' => array( 'user' => $username ),
       'limit' => 1
   );
 
@@ -224,7 +267,7 @@ function get_available_invite_code() {
   return 'ERR_NO_CODE';
 }
 
-function assign_invite_code($order_id, $entry) {
+function assign_user_data($username, $entry, $expire) {
   if ($entry == 'ERR_NO_CODE')
     return false;
 
@@ -232,13 +275,10 @@ function assign_invite_code($order_id, $entry) {
   $id = $entry->_id;
   $rev = $entry->_rev;
 
-  // Retrieve WooCommerce data by order_id
-  $order = wc_get_order( $order_id );
-  $username = $order->get_billing_first_name();
- 
   // Data for CouchDB document update request
   $body_arr = array(
       'user' => $username,
+      'expire' => $expire,
       'key'  => $key,
       '_rev' => $rev,
   );
@@ -259,4 +299,51 @@ function assign_invite_code($order_id, $entry) {
   return $result == '201';
 }
 
+function update_expire_date_in_leap_db($username, $expire) {
+
+  $url = 'https://46.173.218.124:15984/users/_design/User/_view/by_login?key="'. $username .
+         '"&reduce=false&include_docs=true';
+
+  $COUCHDB_LOGIN = 'admin';
+  $COUCHDB_PASSWORD = 'yvxFLDMFSUnMaBh4FEX3P22zJEu3NBEj';
+
+  $ch = curl_init();
+
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_SSLCERT, "/home/certs/ca.crt");
+  curl_setopt($ch, CURLOPT_SSLKEY, "/home/certs/ca.key");
+  curl_setopt($ch, CURLOPT_CAINFO, "/home/certs/ca.crt");
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);                                                                      
+  # auth
+  curl_setopt($ch, CURLOPT_USERPWD, "$COUCHDB_LOGIN:$COUCHDB_PASSWORD");
+
+  $data = curl_exec($ch);
+
+  $result = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+  if ($result == '200') {
+    $docs = json_decode($data)->rows;
+    // Should be exactly one element.
+    if (count($docs) == '1') {
+      $entry = array_shift($docs);
+      $entry = $entry->doc;
+      $entry->expire = $expire;
+      $url = 'https://46.173.218.124:15984/users/' . $entry->_id;
+
+      curl_setopt($ch, CURLOPT_URL, $url);
+      curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($entry));
+      curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+ 
+      $data = curl_exec($ch);
+      $result = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+      return $result == '201' ? "true" : 'ERR_NO_CODE';
+    }
+  }
+
+  curl_close($ch);
+  // Something pathological has happened.
+  return 'ERR_NO_CODE';
+}
 ?>

@@ -37,31 +37,48 @@ function my_checkout_msg() {
 }
 
 function custom_override_checkout_fields( $fields ) {
-  $email = $fields['billing']['billing_email'];
-  $email['required'] = true;
-  $email['label_class'] =array('form-row-first');
-  $first_name = $fields['billing']['billing_first_name'];
-  $first_name['label'] = __('Please, specify username', 'woocommerce');
+/*  $fields['billing']['billing_last_name']['required'] = false;
+  $fields['billing']['billing_last_name']['class'] = array('hidden');
+  $fields['billing']['billing_company']['class'] = array('hidden');
+  $fields['billing']['billing_address_1']['class'] = array('hidden');
+  $fields['billing']['billing_address_1']['required'] = false;
+  $fields['billing']['billing_address_2']['class'] = array('hidden');
+  $fields['billing']['billing_city']['class'] = array('hidden');
+  $fields['billing']['billing_city']['required'] = false;
+ $fields['billing']['billing_state']['class'] = array('hidden');
+ $fields['billing']['billing_country']['required'] = false;
+ $fields['billing']['billing_country']['class'] = array('hidden');
+ $fields['billing']['billing_postcode']['required'] = false;
+ $fields['billing']['billing_postcode']['class'] = array('hidden');*/
+//unset($fields['billing']['billing_last_name']);
+$fields['billing']['billing_last_name']['required'] = false;
+  $fields['billing']['billing_last_name']['class'] = array('hidden');
+unset($fields['billing']['billing_company']);
+unset($fields['billing']['billing_address_1']);
+unset($fields['billing']['billing_address_2']);
+unset($fields['billing']['billing_city']);
+unset($fields['billing']['billing_state']);
+unset($fields['billing']['billing_country']);
+unset($fields['billing']['billing_postcode']);
+
+
+  $fields['billing']['billing_first_name']['label'] = 'Please, specify username';
   // Setting to false to handle it here during custom validation.
-  $first_name['required'] = false;
-  unset($fields['billing']);
-  unset($fields['shipping']);
-  unset($fields['account']);
-  unset($fields['order']);
-  $fields['billing']['billing_first_name'] = $first_name;
-  $fields['billing']['billing_email'] = $email;
-  $fields['billing']['billing_existing_account'] = array(
-    'label'     => __('Create new account or renew existing one?', 'woocommerce'),
-    'placeholder'   => __('', 'woocommerce'),
+  $fields['billing']['billing_first_name']['required'] = false;
+
+  $fields['billing']['billing_phone'] = array(
+    'label'     => 'Create new account or renew existing one?',
     'required'  => false,
     'type'      => 'select',
-    'clear'     => 'false'
+    'clear'     => 'true'
   );
 
-  $fields['billing']['billing_existing_account']['options'] = array(
+  $fields['billing']['billing_phone']['options'] = array(
        'option_new' => 'New account',
        'option_exst' => 'Renew existing account'
   );
+
+  $fields['billing']['billing_email']['class'] = array('form-row-first');
 
   return $fields;
 }
@@ -73,7 +90,7 @@ function custom_checkout_fields_validation() {
     $was_error = true;
   }
 
-  if ( ! $_POST['billing_existing_account'] ) {
+  if ( ! $_POST['billing_phone'] ) {
     wc_add_notice( __( 'Please, choose whether account is new or the existing one' ), 'error' );
     $was_error = true;
   }
@@ -81,7 +98,7 @@ function custom_checkout_fields_validation() {
   if ($was_error) return;
 
   $username = sanitize_text_field($_POST['billing_first_name']);
-  $is_existing = sanitize_text_field($_POST['billing_existing_account']);
+  $is_existing = sanitize_text_field($_POST['billing_phone']);
 
   // verify username is valid
   if(!preg_match('/^[a-z0-9\.\_\-]+$/', $username)) {
@@ -170,5 +187,13 @@ add_action('woocommerce_checkout_before_order_review', 'my_checkout_msg');
 add_action('woocommerce_checkout_order_review', 'my_checkout_msg');
 add_action('woocommerce_checkout_after_order_review', 'my_checkout_msg');
 add_action('woocommerce_after_checkout_form', 'my_checkout_msg');
+
+// Avada adjustment of viewport
+function custom_viewport_meta($viewport) {
+  $viewport = '<meta name="viewport" content="width=device-width, shrink-to-fit=yes" />';
+  return $viewport;
+}
+
+add_filter('avada_viewport_meta', 'custom_viewport_meta');
 
 ?>

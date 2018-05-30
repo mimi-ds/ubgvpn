@@ -45,14 +45,20 @@ function bitmask_login_register_js() {
 
 function bitmask_login_html_form_code() {
   // session[login] and session[password] will be picked up by JS.
+  echo '<div style="width: 30%; padding-left: 30px;">';
+  echo '<br/>';
   echo '<p>';
-  echo 'Your login <br/>';
-  echo '<input type="login" id="srp_username" name="session[login]"/>';
+  echo '<b class="furore-font" >Your login</b> <br/>';
+  echo '<input type="login" class="input-text" id="srp_username" name="session[login]"/>';
   echo '</p>';
   echo '<p>';
-  echo 'Your Password <br/>';
-  echo '<input type="password" id="srp_password" name="session[password]"></input>';
+  echo '<b class="furore-font">Your password</b> <br/>';
+  echo '<input type="password" class="input-text" id="srp_password" name="session[password]"></input>';
   echo '</p>';
+
+  // Out of form button, it will start multi-stage auth process.
+  echo '<p><input type="submit" name="srp-submitted" id="srp-submitted" value="Check" onclick="handshake()"></p>';
+  echo '</div>';
 
   // Invisible form, will POST data for further handshakes with LEAP.
   echo '<form action="' . esc_url( $_SERVER['REQUEST_URI'] ) . '" method="post" id="handshake-form">';
@@ -70,9 +76,6 @@ function bitmask_login_html_form_code() {
   echo '<input type="hidden" name="srp-A" id="srp-A2"></input>';
   echo '<input type="hidden" name="srp-auth" id="srp-auth" value="Log"></input>';
   echo '</form>';
-
-  // Out of form button, it will start multi-stage auth process.
-  echo '<p><input type="submit" name="srp-submitted" id="srp-submitted" value="Check" onclick="handshake()"></p>';
 
   // Debug output
   echo '<table>';
