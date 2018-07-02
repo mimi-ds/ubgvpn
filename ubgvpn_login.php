@@ -77,18 +77,22 @@ function bitmask_login_html_form_code() {
   echo '<input type="hidden" name="srp-auth" id="srp-auth" value="Log"></input>';
   echo '</form>';
 
+  echo '<a id="download_conf" href="#" style="display:none;" download="asapvpn.ovpn">Download configuration file</a>';
+
   // Debug output
   echo '<table>';
   echo '<tr>';
   echo '<td>';
-  echo '<textarea id="cert-dialog" cols="60" rows="50" disabled> </textarea>';
+  echo '<textarea id="cert-dialog" cols="40" rows="50" disabled> </textarea>';
   echo '</td>';
   echo '<td>';
-  echo '<textarea id="config-dialog" cols="60" rows="50" disabled> </textarea>';
+  echo '<textarea id="config-dialog" cols="40" rows="50" disabled> </textarea>';
+  echo '</td>';
+  echo '<td>';
+  echo '<textarea id="cacert-dialog" cols="40" rows="50" disabled> </textarea>';
   echo '</td>';
   echo '</tr>';
   echo '</table>';
-
 }
 
 // Stage 2, use POSTed data to make handshake request to LEAP
@@ -167,6 +171,9 @@ function bitmask_login3_html_form_code() {
     echo '</div>';
     echo '<div id="config">';
     echo retrieve_leap_data('https://ubgvpn.xyz/1/configs/eip-service.json', $cookie_string, $token);
+    echo '</div>';
+    echo '<div id="cacert">';
+    echo retrieve_leap_data('https://ubgvpn.xyz/ca.crt', $cookie_string, $token);
     echo '</div>';
   }
 }
